@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "node --env-file=../.env --import tsx --watch src/server.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "tsc -p tsconfig.build.json",
     "test": "node --import tsx --test test/*.test.ts",
     "smoke": "node --env-file=../.env --import tsx src/smoke.ts"
   },

@@ -7,34 +7,42 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- Project skeleton: folder layout, empty Compose file, env example, README, this changelog, engineering rules in CLAUDE.md
-- OpenClaw gateway service in Compose: pinned image 2026.10.5, token auth, healthcheck, persistent state volume, port published on 127.0.0.1 only
-- Gateway config in `openclaw/openclaw.json`, copied into the state volume at start because the image entrypoint rewrites the file
-- `.env.example`: optional `OPENCLAW_GATEWAY_HOST_PORT`, and a note that the OpenRouter account needs credits
-- Backend package: TypeScript, `ws`, `node:test` through `tsx`; no HTTP server yet
-- Ed25519 device identity stored on disk, with the v2 signed payload for the connect handshake
-- Gateway client: challenge, signed connect, hello-ok, request/response by id, events, reconnect with backoff, pairing retry
-- `npm run smoke`: connect to a real gateway, list sessions, optionally send one message or stay connected
-- `.env.example`: optional `OPENCLAW_GATEWAY_URL` for running the backend outside Docker
+- Project skeleton: folder layout, env example, README, this changelog, engineering rules in `CLAUDE.md`
+- Compose service `openclaw-gateway`: pinned image 2026.10.5, token auth, healthcheck, state volume, port on 127.0.0.1 only
+- `openclaw/openclaw.json` and `openclaw/start.sh`: the start script merges the repo config with `openclaw config patch` and sets the model from `OPENCLAW_MODEL`, default Sonnet 5.5 through OpenRouter
+- Backend: Ed25519 device identity on disk with the v2 signed payload; gateway client with challenge, signed connect, request/response by id, events, reconnect with backoff, pairing retry
 - `POST /api/chat`: the reply streams as SSE events (`started`, `status`, `delta`, `done`, `error`); a failure before the run starts is a JSON 502
-- Chat service: subscribes to `chat` events before `chat.send`, keeps the events of its session and run, applies `replace`, takes the reply text from `final.message`, sends `chat.abort` when the client disconnects
+- Chat service: subscribes to `chat` events before `chat.send`, keeps the events of its session and run, applies `replace`, takes the reply from `final.message`, sends `chat.abort` when the client disconnects
 - `GET /healthz` reports whether the gateway is connected
-- `npm run dev`: runs the backend against the gateway on 127.0.0.1:18789 and restarts on file changes
-- `openclaw/start.sh`: container start script; `OPENCLAW_MODEL` picks the model, default Sonnet 5.5 through OpenRouter
-- `.env.example`: optional `OPENCLAW_MODEL`, `PORT`, `HOST`
-- Dependency `fastify` 5.12.7: HTTP server, JSON schema validation of the request body, request logging
-- Postman collection for the backend endpoints in `docs/`, with checks on each request
-- Vue chat page in `frontend/`: the assistant text renders as it streams; Stop aborts the request, and the backend then stops the run on the gateway; one gateway session per page load, shown in the header
-- `frontend/src/api/stream-chat.ts`: reads the SSE response with `fetch` and a `ReadableStream`; a chunk that ends in the middle of an event is kept until the rest arrives; a non-200 response becomes an `error` event
-- Vite dev server proxies `/api` to the backend on 127.0.0.1:3000, so the page and the API share one origin
-- Frontend tests: events split across chunks, a character split across chunks, blocks without data, cancel of the body stream on early stop
-- Dependencies `vue` 3.5.44, `vite` 8.3.5, `@vitejs/plugin-vue` 6.0.10, `vue-tsc` 3.3.13: the frontend stack fixed in CLAUDE.md; `vue-tsc` because `tsc` cannot typecheck `.vue` files
+- `npm run dev`, `npm run build`, `npm run smoke` (connect to a real gateway and send one message)
+- Frontend: Vue 3 chat page; the text renders as it streams; Stop aborts the request and the run; one gateway session per page load
+- `frontend/src/api/stream-chat.ts`: reads the SSE response with `fetch` and a `ReadableStream`; partial events and split characters are buffered until the rest arrives
+- Backend tests (identity, signature, gateway client against a fake gateway, chat service, route) and frontend tests (SSE reader)
+- Dockerfiles: backend multi-stage build with `dist/` and production dependencies only; frontend Vite build served by nginx, `/api/` proxied unbuffered, backend name resolved per request through Docker's DNS
+- Compose services `backend` (identity in a volume, no published port, starts after the gateway is healthy) and `frontend` (page on 127.0.0.1:8080)
+- `.env.example`: `OPENCLAW_MODEL`, `FRONTEND_HOST_PORT`, `OPENCLAW_GATEWAY_HOST_PORT`, `OPENCLAW_GATEWAY_URL`, `PORT`, `HOST`
+- Dependencies: `fastify` 5.12.7, `ws` 8.22.0, `vue` 3.5.44, `vite` 8.3.5, `@vitejs/plugin-vue` 6.0.10, `vue-tsc` 3.3.13
+- Postman collection for the backend in `docs/`
 
 ### Changed
 
-- CLAUDE.md: protocol rule that `chat.send` has no `model` field; the model is set in the gateway config
-- The model is no longer in `openclaw/openclaw.json`. The start script sets it from `OPENCLAW_MODEL` with `openclaw config set`, because the CLI checks model names before env substitution and rejects a `${VAR}` placeholder there
+- The model is set from `OPENCLAW_MODEL` at start, not in `openclaw.json`: the CLI checks model names before env substitution and rejects a `${VAR}` placeholder
+- Chat service: `events.on` from `node:events` replaces the hand-written event queue
+- The 502 body of `POST /api/chat` is `{ code, message }`, the same shape as Fastify's validation errors
+- Gateway client: `connect()` is called once; the backend passes the Fastify logger straight through
+- `npm run smoke` sends its message through the chat service instead of its own event handling
+- README and ARCHITECTURE shortened; comments in compose, nginx and env files trimmed
+
+### Removed
+
+- Gateway client options nobody set (`scopes`, `caps`, `clientVersion`, `requestTimeoutMs`), the `hello` getter, the `retryable` field, the unused `AgentEvent` type
+- `npm run smoke` flags `--stay` and `--chat`; `npm run preview` in the frontend
 
 ### Fixed
 
-- The repo config never reached the gateway after the first start. The image runs `doctor --fix` before the gateway, and doctor restored its own last-known-good copy over the plain `cp` every time. The start script now merges the repo config with `openclaw config patch`, the validated write path
+- The repo config never reached the gateway after the first start: the image runs `doctor --fix` before the gateway, and doctor restored its last-known-good copy over the plain `cp`. The start script now merges the config through `openclaw config patch`
+
+### Security
+
+- Backend and frontend containers run as non-root, with all capabilities dropped and `no-new-privileges`; the frontend image is `nginxinc/nginx-unprivileged`
+- Only two host ports, both on 127.0.0.1: the page on 8080 and the gateway on 18789
