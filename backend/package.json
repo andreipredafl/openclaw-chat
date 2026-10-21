@@ -1,0 +1,24 @@
+{
+  "name": "openclaw-chat-backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Backend for openclaw-chat: talks to an OpenClaw gateway over its WebSocket protocol.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --import tsx --test test/*.test.ts",
+    "smoke": "node --env-file=../.env --import tsx src/smoke.ts"
+  },
+  "dependencies": {
+    "ws": "8.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "@types/ws": "8.18.2",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3"
+  }
+}

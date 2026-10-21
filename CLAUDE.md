@@ -60,7 +60,7 @@ Applies to CHANGELOG, README, docs, commit messages and code comments.
 # backend, local dev against ws://localhost:18789
 cd backend && npm run dev
 cd backend && npm test
-cd backend && npm run smoke     # connect, hello-ok, sessions.list, one chat.send
+cd backend && npm run smoke     # connect, hello-ok, sessions.list; --chat sends one message, --stay keeps the connection
 
 # full stack
 docker compose up --build
