@@ -1,0 +1,252 @@
+{
+  "info": {
+    "name": "openclaw-chat backend",
+    "description": "Requests for the backend of openclaw-chat. Start the gateway (docker compose up -d) and the backend (cd backend && npm run dev) first. Run the requests in order. POST /api/chat answers with Server-Sent Events; Postman shows the whole stream when it ends, curl -N shows it as it arrives.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "sessionKey", "value": "agent:main:postman" }
+  ],
+  "item": [
+    {
+      "name": "1. Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": { "raw": "{{baseUrl}}/healthz", "host": ["{{baseUrl}}"], "path": ["healthz"] },
+        "description": "ok is always true while the backend runs. gateway is \"connected\" once the WebSocket handshake with the gateway succeeded, \"disconnected\" while it is pairing or reconnecting."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('ok is true', () => pm.expect(body.ok).to.eql(true));",
+              "pm.test('gateway is connected', () => pm.expect(body.gateway).to.eql('connected'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. New conversation (sets sessionKey)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": { "raw": "{{baseUrl}}/healthz", "host": ["{{baseUrl}}"], "path": ["healthz"] },
+        "description": "Only sets the collection variable sessionKey to a fresh value, so the chat requests below start an empty conversation. A session key names a conversation with memory; the gateway keeps it."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const key = 'agent:main:postman-' + Date.now();",
+              "pm.collectionVariables.set('sessionKey', key);",
+              "pm.test('sessionKey set to ' + key, () => pm.expect(key).to.match(/^agent:[A-Za-z0-9_-]+:[A-Za-z0-9_-]+$/));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Chat: story (streams)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"message\": \"Tell me a 5 sentence story about a lighthouse keeper. Give the keeper a name.\",\n  \"sessionKey\": \"{{sessionKey}}\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": { "raw": "{{baseUrl}}/api/chat", "host": ["{{baseUrl}}"], "path": ["api", "chat"] },
+        "description": "The reply comes as SSE blocks: started, status (a few), delta (the text, in pieces), done (the full text). The free OpenRouter route sometimes sends the whole text in one delta."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "pm.test('content-type is text/event-stream', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('text/event-stream'));",
+              "const text = pm.response.text();",
+              "pm.test('has started', () => pm.expect(text).to.include('event: started'));",
+              "pm.test('has at least one delta', () => pm.expect(text).to.include('event: delta'));",
+              "pm.test('ends with done', () => pm.expect(text.trim().split('\\n\\n').pop()).to.include('event: done'));",
+              "pm.test('no error event', () => pm.expect(text).to.not.include('event: error'));",
+              "const done = text.split('\\n\\n').find((b) => b.startsWith('event: done'));",
+              "if (done) {",
+              "  const data = JSON.parse(done.split('\\n')[1].slice('data: '.length));",
+              "  pm.test('done carries the full text', () => pm.expect(data.text.length).to.be.above(50));",
+              "  console.log('reply:', data.text);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Chat: follow-up in the same conversation",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"message\": \"What was the keeper's name? Reply with the name only.\",\n  \"sessionKey\": \"{{sessionKey}}\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": { "raw": "{{baseUrl}}/api/chat", "host": ["{{baseUrl}}"], "path": ["api", "chat"] },
+        "description": "Same sessionKey as request 3, so the model remembers the story. Send it right after request 3. The done event should contain the name from the story."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "const text = pm.response.text();",
+              "pm.test('ends with done', () => pm.expect(text).to.include('event: done'));",
+              "const done = text.split('\\n\\n').find((b) => b.startsWith('event: done'));",
+              "if (done) {",
+              "  const data = JSON.parse(done.split('\\n')[1].slice('data: '.length));",
+              "  pm.test('reply is short (a name)', () => pm.expect(data.text.length).to.be.below(80));",
+              "  console.log('reply:', data.text);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Chat: default conversation (no sessionKey)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"message\": \"Reply with the word pong.\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": { "raw": "{{baseUrl}}/api/chat", "host": ["{{baseUrl}}"], "path": ["api", "chat"] },
+        "description": "Without sessionKey the backend uses agent:main:main, the gateway's main conversation, shared with the CLI."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "const text = pm.response.text();",
+              "pm.test('started names the default session', () => pm.expect(text).to.include('\"sessionKey\":\"agent:main:main\"'));",
+              "pm.test('ends with done', () => pm.expect(text).to.include('event: done'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Validation: empty message -> 400",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"message\": \"\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": { "raw": "{{baseUrl}}/api/chat", "host": ["{{baseUrl}}"], "path": ["api", "chat"] },
+        "description": "The body schema requires 1 to 8000 characters. Rejected before anything reaches the gateway."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 400', () => pm.response.to.have.status(400));",
+              "pm.test('validation error', () => pm.expect(pm.response.json().code).to.eql('FST_ERR_VALIDATION'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Validation: sessionKey outside agent:* -> 400",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"message\": \"hi\",\n  \"sessionKey\": \"global\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": { "raw": "{{baseUrl}}/api/chat", "host": ["{{baseUrl}}"], "path": ["api", "chat"] },
+        "description": "Only agent:<agentId>:<sessionId> is accepted, so a client cannot write into other kinds of gateway sessions."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 400', () => pm.response.to.have.status(400));",
+              "pm.test('message names sessionKey', () => pm.expect(pm.response.json().message).to.include('sessionKey'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. Chat: long reply, cancel it by hand",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"message\": \"Count from 1 to 300, one number per line, nothing else.\",\n  \"sessionKey\": \"{{sessionKey}}\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": { "raw": "{{baseUrl}}/api/chat", "host": ["{{baseUrl}}"], "path": ["api", "chat"] },
+        "description": "Press Cancel in Postman while this runs. The backend notices the closed connection and sends chat.abort to the gateway. Check the backend terminal for a line like: chat.abort runId=... aborted=true"
+      }
+    },
+    {
+      "name": "9. Gateway down -> 502 (stop the gateway first)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"message\": \"hi\",\n  \"sessionKey\": \"{{sessionKey}}\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": { "raw": "{{baseUrl}}/api/chat", "host": ["{{baseUrl}}"], "path": ["api", "chat"] },
+        "description": "Run docker compose stop openclaw-gateway, send this, then docker compose start openclaw-gateway. While the gateway is down the backend answers 502 with a JSON error instead of starting a stream. After the gateway is back, request 1 shows connected again within about 30 seconds."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('502 while the gateway is down, 200 otherwise', () => pm.expect([200, 502]).to.include(pm.response.code));",
+              "if (pm.response.code === 502) {",
+              "  const body = pm.response.json();",
+              "  pm.test('JSON error with a code', () => pm.expect(body.error.code).to.be.a('string'));",
+              "  console.log('error:', body.error.code, body.error.message);",
+              "}"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

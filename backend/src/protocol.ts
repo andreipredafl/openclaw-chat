@@ -101,8 +101,13 @@ export type ChatSendParams = {
 };
 
 // chat.send only admits the run; the reply arrives as `chat` events.
-// status is "accepted" for a new run, "in_flight" for a duplicate idempotencyKey.
+// status: "started" once the run began, "accepted" while queued, "in_flight" for a duplicate idempotencyKey.
 export type ChatSendAck = { runId: string; status: string };
+
+// Without runId the gateway stops every run in the session.
+export type ChatAbortParams = { sessionKey: string; runId?: string };
+
+export type ChatAbortResult = { ok: boolean; aborted: boolean; runIds: string[] };
 
 type ChatEventBase = { runId: string; sessionKey: string; agentId?: string; seq: number };
 
@@ -110,13 +115,16 @@ export type ChatEvent =
   // Progress before the first token, e.g. "starting_model".
   | (ChatEventBase & { state: "status"; phase: string })
   // Streamed text. With `replace: true`, deltaText is the whole text so far, not an append.
+  // Right before `final` the gateway clears its live text with an empty replace.
   | (ChatEventBase & { state: "delta"; deltaText: string; replace?: boolean })
-  | (ChatEventBase & { state: "final"; stopReason?: string })
-  | (ChatEventBase & { state: "aborted"; errorMessage?: string; stopReason?: string })
+  // `message` is the complete assistant message: { role, content: [{ type: "text", text }, ...] }.
+  | (ChatEventBase & { state: "final"; stopReason?: string; message?: unknown })
+  | (ChatEventBase & { state: "aborted"; errorMessage?: string; stopReason?: string; message?: unknown })
   | (ChatEventBase & {
       state: "error";
       errorMessage?: string;
       errorKind?: "refusal" | "timeout" | "rate_limit" | "context_length" | "state_contention" | "unknown";
+      stopReason?: string;
     });
 
 // Agent events carry no sessionKey. Filter them by runId.

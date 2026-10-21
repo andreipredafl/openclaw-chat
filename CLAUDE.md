@@ -35,8 +35,10 @@ No new runtime dependency without a one-line reason in the commit message.
 - Sign exactly what you send. `clientId`, `clientMode`, `role`, `scopes` and `token` in the signed payload must equal the `connect` params.
 - Filter `chat` events by `sessionKey` and `runId`. Filter `agent` events by `runId` only; they carry no `sessionKey`.
 - A `delta` with `replace: true` replaces the whole text. Unknown `state` values are ignored, not fatal.
+- Right before `final` the gateway clears its live text with an empty `replace`. Skip it. The reply is `final.message`; it wins over the streamed text.
 - Every `chat.send` carries a fresh `idempotencyKey`.
 - `chat.send` has no `model` field and its schema rejects unknown keys. The model comes from the gateway config (`agents.defaults.model.primary`) or a per-session override through `sessions.patch`.
+- When the HTTP client disconnects during a run, send `chat.abort` with the `runId`. A run must not keep streaming to nobody.
 
 ## Workflow
 
@@ -61,6 +63,7 @@ Applies to CHANGELOG, README, docs, commit messages and code comments.
 cd backend && npm run dev
 cd backend && npm test
 cd backend && npm run smoke     # connect, hello-ok, sessions.list; --chat sends one message, --stay keeps the connection
+curl -N -X POST localhost:3000/api/chat -H 'content-type: application/json' -d '{"message":"hi"}'
 
 # full stack
 docker compose up --build
