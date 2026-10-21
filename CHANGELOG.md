@@ -24,6 +24,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `.env.example`: optional `OPENCLAW_MODEL`, `PORT`, `HOST`
 - Dependency `fastify` 5.12.7: HTTP server, JSON schema validation of the request body, request logging
 - Postman collection for the backend endpoints in `docs/`, with checks on each request
+- Vue chat page in `frontend/`: the assistant text renders as it streams; Stop aborts the request, and the backend then stops the run on the gateway; one gateway session per page load, shown in the header
+- `frontend/src/api/stream-chat.ts`: reads the SSE response with `fetch` and a `ReadableStream`; a chunk that ends in the middle of an event is kept until the rest arrives; a non-200 response becomes an `error` event
+- Vite dev server proxies `/api` to the backend on 127.0.0.1:3000, so the page and the API share one origin
+- Frontend tests: events split across chunks, a character split across chunks, blocks without data, cancel of the body stream on early stop
+- Dependencies `vue` 3.5.44, `vite` 8.3.5, `@vitejs/plugin-vue` 6.0.10, `vue-tsc` 3.3.13: the frontend stack fixed in CLAUDE.md; `vue-tsc` because `tsc` cannot typecheck `.vue` files
 
 ### Changed
 

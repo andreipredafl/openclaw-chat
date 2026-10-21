@@ -5,7 +5,7 @@ Chat client for an OpenClaw gateway (WebSocket protocol v4), built for a technic
 ## Stack (fixed)
 
 - Backend: Node 22, TypeScript (strict), Fastify, `ws`
-- Frontend: Vite, React, TypeScript, served by nginx in Docker
+- Frontend: Vite, Vue 3, TypeScript, served by nginx in Docker
 - Infra: Docker Compose (gateway, backend, frontend)
 - Tests: `node:test`, run through `tsx`
 
@@ -64,6 +64,11 @@ cd backend && npm run dev
 cd backend && npm test
 cd backend && npm run smoke     # connect, hello-ok, sessions.list; --chat sends one message, --stay keeps the connection
 curl -N -X POST localhost:3000/api/chat -H 'content-type: application/json' -d '{"message":"hi"}'
+
+# frontend, local dev; proxies /api to the backend above
+cd frontend && npm run dev      # http://127.0.0.1:5173
+cd frontend && npm test
+cd frontend && npm run build    # typecheck, then the production bundle in dist/
 
 # full stack
 docker compose up --build
