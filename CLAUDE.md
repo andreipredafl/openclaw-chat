@@ -36,6 +36,7 @@ No new runtime dependency without a one-line reason in the commit message.
 - Filter `chat` events by `sessionKey` and `runId`. Filter `agent` events by `runId` only; they carry no `sessionKey`.
 - A `delta` with `replace: true` replaces the whole text. Unknown `state` values are ignored, not fatal.
 - Every `chat.send` carries a fresh `idempotencyKey`.
+- `chat.send` has no `model` field and its schema rejects unknown keys. The model comes from the gateway config (`agents.defaults.model.primary`) or a per-session override through `sessions.patch`.
 
 ## Workflow
 
