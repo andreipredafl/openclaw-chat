@@ -23,7 +23,12 @@ async function send(text: string) {
 
   try {
     for await (const event of streamChat({ message: text, sessionKey, signal: controller.signal })) {
+      // The phase stays in the bubble only until the next event.
+      if (event.type !== "status") reply.phase = undefined;
       switch (event.type) {
+        case "status":
+          reply.phase = event.phase;
+          break;
         case "delta":
           reply.text = event.replace ? event.text : reply.text + event.text;
           break;
@@ -36,7 +41,7 @@ async function send(text: string) {
           reply.error = `${event.code}: ${event.message}`;
           break;
         default:
-          break; // started, status: nothing to show
+          break; // started: nothing to show
       }
     }
   } catch (err) {
@@ -48,6 +53,7 @@ async function send(text: string) {
   } finally {
     // Stopped, or the stream ended early: keep the text that arrived.
     if (reply.status === "streaming") reply.status = "done";
+    reply.phase = undefined;
     active = null;
     busy.value = false;
   }

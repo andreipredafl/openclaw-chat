@@ -105,6 +105,11 @@ header h1 {
   overflow-wrap: anywhere;
 }
 
+.phase {
+  color: var(--muted);
+  font-style: italic;
+}
+
 .message.streaming .text::after {
   content: "▍";
   animation: blink 1s steps(2, start) infinite;

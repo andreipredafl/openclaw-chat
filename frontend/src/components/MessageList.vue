@@ -13,7 +13,7 @@ watch(() => props.messages, () => end.value?.scrollIntoView({ block: "end" }), {
   <div class="messages">
     <p v-if="messages.length === 0" class="hint">Send a message. The reply shows up as the model writes it.</p>
     <article v-for="m in messages" :key="m.id" :class="['message', m.role, m.status]">
-      <div class="text">{{ m.text }}</div>
+      <div class="text"><span v-if="m.phase && !m.text" class="phase">{{ m.phase.replaceAll("_", " ") }}… </span>{{ m.text }}</div>
       <div v-if="m.error" class="error">{{ m.error }}</div>
     </article>
     <div ref="end" />

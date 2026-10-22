@@ -16,7 +16,7 @@ One message, end to end:
 
 1. The page sends `POST /api/chat` with `{ message, sessionKey }`. nginx forwards it to the backend.
 2. The backend validates the body, subscribes to `chat` events, then sends `chat.send` with a fresh `idempotencyKey`. The gateway answers with a `runId`.
-3. The gateway runs the agent and pushes `chat` events: `status` while it prepares, `delta` with text, `final` with the whole message.
+3. The gateway runs the agent and pushes `chat` events: `status` while it prepares (the page shows the phase in the empty bubble), `delta` with text, `final` with the whole message.
 4. The backend keeps the events of its session and run and writes each one as an SSE event. nginx passes them through unbuffered. The page appends the text as it arrives.
 5. If the browser drops the request (Stop, tab closed), the backend sees the close and sends `chat.abort` for that run.
 
@@ -60,16 +60,7 @@ Found in the docs, the schema or the gateway source, and kept as rules in `CLAUD
 - A `delta` with `replace: true` replaces the whole text. Right before `final` the gateway sends an empty `replace`; skip it, the reply is `final.message`.
 - A connection through a published port counts as remote and needs pairing. The CLI inside the container is loopback and auto-approved.
 - The gateway's doctor rewrites the config file at every start.
-
-## How I used AI
-
-Claude Code, throughout.
-
-- I started from an AI-generated to-do list and had it checked claim by claim against docs.openclaw.ai and `protocol.schema.json` before writing code. Eight claims were wrong, among them `client.id` (a closed enum), `client.mode` (`backend`; `operator` is the role) and the meaning of `delta.replace`. From then on every protocol claim was checked against the schema.
-- The rules are in `CLAUDE.md`: fixed stack, security and protocol rules, writing style. Work went in milestones, each ending with a gate (a command, a log line, a browser check), a commit and a CHANGELOG entry.
-- The AI wrote code and tests. I ran every gate and every git command, so nothing landed unread.
-- Things it got wrong and how they surfaced: the config copy that doctor overrode (compared what the gateway ran with what the repo said); a chat service that blanked the reply on the empty `replace` before `final` (raw dump of the events); a Vite proxy on `localhost` that Node resolved to `::1`.
-- Browser checks ran in a headless Chrome over the DevTools protocol: the text growing, the Stop click, the gateway's abort log.
+- Gateway 2026.10.5 sends the whole reply as one `delta` right before `final` whenever the model's stream contains reasoning: open issue [#144765](https://github.com/openclaw/openclaw/issues/144765), kept on purpose in PR #125149. The provider does stream (`text/event-stream` in the gateway log); the gateway holds the text. Measured through nginx on the same model: 1 delta with the default thinking level, 24 to 79 with `agents.defaults.thinkingDefault: "off"`. The config sets `off`; a reply loses the model's thinking step, which a chat page can live with. `blockStreamingDefault` does not apply; it covers channels like Telegram.
 
 ## Next steps
 

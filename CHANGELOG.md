@@ -23,6 +23,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `.env.example`: `OPENCLAW_MODEL`, `FRONTEND_HOST_PORT`, `OPENCLAW_GATEWAY_HOST_PORT`, `OPENCLAW_GATEWAY_URL`, `PORT`, `HOST`
 - Dependencies: `fastify` 5.12.7, `ws` 8.22.0, `vue` 3.5.44, `vite` 8.3.5, `@vitejs/plugin-vue` 6.0.10, `vue-tsc` 3.3.13
 - Postman collection for the backend in `docs/`
+- The assistant bubble shows the gateway's phase (`starting model…`) until the first text arrives
 
 ### Changed
 
@@ -41,6 +42,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 
 - The repo config never reached the gateway after the first start: the image runs `doctor --fix` before the gateway, and doctor restored its last-known-good copy over the plain `cp`. The start script now merges the config through `openclaw config patch`
+- Replies arrived in one piece: gateway 2026.10.5 holds the text until the end when the model's stream contains reasoning (openclaw/openclaw#144765). `openclaw.json` now sets `agents.defaults.thinkingDefault` to `off`; 24 to 79 deltas per reply instead of 1
 
 ### Security
 

@@ -27,7 +27,7 @@ Fill in `.env`:
 
 - `OPENCLAW_GATEWAY_TOKEN`: shared secret between gateway and backend. Generate one with `openssl rand -hex 32`.
 - `OPENROUTER_API_KEY`: your key. Only the gateway container receives it.
-- `OPENCLAW_MODEL`: optional. The default, `openrouter/anthropic/claude-sonnet-5.5`, needs credits on the OpenRouter account and answers with HTTP 402 without them. A free model works with none: `openrouter/minimax/minimax-m3.1-flash:free`.
+- `OPENCLAW_MODEL`: optional. The default, `openrouter/anthropic/claude-sonnet-5.5`, needs credits on the OpenRouter account and answers with HTTP 402 without them. A free model needs no credits: `openrouter/minimax/minimax-m3.1-flash:free`.
 
 ## Run
 
@@ -62,7 +62,7 @@ curl -N -X POST localhost:8080/api/chat -H 'content-type: application/json' \
   -d '{"message":"Count from 1 to 10, one number per line"}'
 ```
 
-Events: `started`, `status`, `delta` (one or more), then `done` or `error`. Some free models send the whole answer in one `delta`.
+Events: `started`, `status` (the gateway's phase, shown in the bubble until the first text), `delta` (one every few tokens), then `done` or `error`.
 
 ## Local development
 
@@ -91,4 +91,5 @@ A Postman collection for the backend is in `docs/`.
 - The reply is `NOT_CONNECTED`: the backend is not paired yet, or the gateway is restarting. `docker compose logs backend` says which.
 - The reply is a `402`: no credits on the OpenRouter account. Switch to a free model, then `docker compose up -d`.
 - The reply is a `429`: the free model's rate limit. Wait a minute.
+- The reply shows up all at once: the gateway holds the text until the end when the model's stream contains reasoning ([openclaw#144765](https://github.com/openclaw/openclaw/issues/144765)). `openclaw/openclaw.json` sets `agents.defaults.thinkingDefault` to `off` for that reason. A model that reasons no matter what, such as `thinkingmachines/inkling`, still arrives in one piece.
 - `devices approve` says the request is unknown: that id expired. The backend logs the current one on every retry.

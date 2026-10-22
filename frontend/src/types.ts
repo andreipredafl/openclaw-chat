@@ -5,6 +5,8 @@ export type Message = {
   role: "user" | "assistant";
   text: string;
   status: "streaming" | "done" | "error";
+  // The gateway's progress phase ("starting_model"), shown until the first text arrives.
+  phase?: string;
   // Set when status is "error". `text` keeps what streamed before the failure.
   error?: string;
 };
