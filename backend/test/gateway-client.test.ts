@@ -2,16 +2,16 @@
 // the protocol: the challenge, connect with real signature verification, one
 // RPC method, one pushed event, and the connect errors we handle.
 
-import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createPublicKey, randomUUID, verify } from "node:crypto";
+import { randomUUID, verify } from "node:crypto";
 import { once } from "node:events";
+import { test } from "node:test";
 import { WebSocketServer, type WebSocket } from "ws";
 import { buildPayloadV2, createIdentity } from "../src/device-identity.js";
 import { GatewayClient, GatewayError } from "../src/gateway-client.js";
 import type { ConnectParams, HelloOk } from "../src/protocol.js";
+import { publicKeyFromRaw } from "./helpers.js";
 
-const ED25519_SPKI_HEADER = Buffer.from("302a300506032b6570032100", "hex");
 const TOKEN = "test-token";
 
 // The same check the real gateway does: rebuild the payload from the connect
@@ -26,11 +26,7 @@ function signatureIsValid(params: ConnectParams): boolean {
     nonce: params.device.nonce,
     ts: params.device.signedAt,
   });
-  const key = createPublicKey({
-    key: Buffer.concat([ED25519_SPKI_HEADER, Buffer.from(params.device.publicKey, "base64url")]),
-    format: "der",
-    type: "spki",
-  });
+  const key = publicKeyFromRaw(params.device.publicKey);
   return verify(null, Buffer.from(payload), key, Buffer.from(params.device.signature, "base64url"));
 }
 
@@ -39,10 +35,7 @@ function helloOk(scopes: string[]): HelloOk {
     type: "hello-ok",
     protocol: 4,
     server: { version: "test", connId: randomUUID() },
-    features: { methods: ["sessions.list"], events: ["chat"] },
-    snapshot: {},
     auth: { role: "operator", scopes },
-    policy: { maxPayload: 1_000_000, maxBufferedBytes: 1_000_000, tickIntervalMs: 15_000 },
   };
 }
 

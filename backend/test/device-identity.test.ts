@@ -1,9 +1,9 @@
-import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createPublicKey, verify } from "node:crypto";
+import { verify } from "node:crypto";
 import { mkdtempSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { test } from "node:test";
 import {
   buildPayloadV2,
   createIdentity,
@@ -11,14 +11,7 @@ import {
   loadOrCreateIdentity,
   signChallenge,
 } from "../src/device-identity.js";
-
-// SPKI DER header for an Ed25519 public key (RFC 8410), followed by the 32 raw bytes.
-const ED25519_SPKI_HEADER = Buffer.from("302a300506032b6570032100", "hex");
-
-function publicKeyFromRaw(base64url: string) {
-  const raw = Buffer.from(base64url, "base64url");
-  return createPublicKey({ key: Buffer.concat([ED25519_SPKI_HEADER, raw]), format: "der", type: "spki" });
-}
+import { publicKeyFromRaw } from "./helpers.js";
 
 const input = {
   clientId: "gateway-client",

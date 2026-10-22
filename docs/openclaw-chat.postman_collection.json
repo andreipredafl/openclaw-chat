@@ -240,8 +240,8 @@
               "pm.test('502 while the gateway is down, 200 otherwise', () => pm.expect([200, 502]).to.include(pm.response.code));",
               "if (pm.response.code === 502) {",
               "  const body = pm.response.json();",
-              "  pm.test('JSON error with a code', () => pm.expect(body.error.code).to.be.a('string'));",
-              "  console.log('error:', body.error.code, body.error.message);",
+              "  pm.test('JSON error with a code', () => pm.expect(body.code).to.be.a('string'));",
+              "  console.log('error:', body.code, body.message);",
               "}"
             ]
           }

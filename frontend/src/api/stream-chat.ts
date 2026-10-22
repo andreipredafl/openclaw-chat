@@ -63,11 +63,10 @@ function parseBlock(block: string): ChatStreamEvent | undefined {
   return isRecord(parsed) && typeof parsed.type === "string" ? (parsed as ChatStreamEvent) : undefined;
 }
 
-// A failure before the run starts is a JSON body, not a stream.
-// From the chat route: { error: { code, message } }. From body validation: { code, message }.
+// A failure before the run starts is a JSON body { code, message }, not a stream.
 async function errorEvent(response: Response): Promise<ChatStreamEvent> {
   const body: unknown = await response.json().catch(() => undefined);
-  const error: Record<string, unknown> = isRecord(body) ? (isRecord(body.error) ? body.error : body) : {};
+  const error: Record<string, unknown> = isRecord(body) ? body : {};
   return {
     type: "error",
     code: typeof error.code === "string" ? error.code : `HTTP_${response.status}`,

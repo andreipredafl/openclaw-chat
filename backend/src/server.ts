@@ -4,7 +4,7 @@ import Fastify from "fastify";
 import { ChatService } from "./chat-service.js";
 import { loadConfig } from "./config.js";
 import { loadOrCreateIdentity } from "./device-identity.js";
-import { GatewayClient, type Logger } from "./gateway-client.js";
+import { GatewayClient, type PairingRequired } from "./gateway-client.js";
 import { chatRoutes } from "./routes/chat.js";
 
 const config = loadConfig();
@@ -17,34 +17,19 @@ const app = Fastify({
   forceCloseConnections: true,
 });
 
-const log: Logger = {
-  info: (msg) => app.log.info(msg),
-  warn: (msg) => app.log.warn(msg),
-  error: (msg) => app.log.error(msg),
-};
-
-const gateway = new GatewayClient({
-  url: config.gatewayUrl,
-  token: config.gatewayToken,
-  identity,
-  log,
+const gateway = new GatewayClient({ url: config.gatewayUrl, token: config.gatewayToken, identity, log: app.log });
+gateway.on("pairing-required", ({ requestId }: PairingRequired) => {
+  app.log.warn(`approve this backend once: docker compose exec openclaw-gateway node dist/index.js devices approve ${requestId ?? "<requestId>"}`);
 });
 
-gateway.on("pairing-required", ({ requestId }: { requestId: string | undefined }) => {
-  app.log.warn(
-    `approve this backend once: docker compose exec openclaw-gateway node dist/index.js devices approve ${requestId ?? "<requestId>"}`,
-  );
-});
-
-const chat = new ChatService(gateway, log);
+const chat = new ChatService(gateway, app.log);
 
 app.get("/healthz", async () => ({ ok: true, gateway: gateway.isReady ? "connected" : "disconnected" }));
 await app.register(chatRoutes, { chat });
-
 await app.listen({ host: config.host, port: config.port });
 app.log.info(`device ${identity.deviceId} connecting to ${config.gatewayUrl}`);
 
-// Not awaited: /healthz answers while pairing is pending; /api/chat returns 502 until connected.
+// Not awaited: /healthz answers while pairing is pending; /api/chat answers 502 until connected.
 gateway.connect().catch((err: unknown) => {
   app.log.error(`gateway connection failed for good: ${err instanceof Error ? err.message : String(err)}`);
   process.exitCode = 1;

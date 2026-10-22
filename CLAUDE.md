@@ -62,7 +62,7 @@ Applies to CHANGELOG, README, docs, commit messages and code comments.
 # backend, local dev against ws://localhost:18789
 cd backend && npm run dev
 cd backend && npm test
-cd backend && npm run smoke     # connect, hello-ok, sessions.list; --chat sends one message, --stay keeps the connection
+cd backend && npm run smoke     # connect to the gateway and send one message, no HTTP
 curl -N -X POST localhost:3000/api/chat -H 'content-type: application/json' -d '{"message":"hi"}'
 
 # frontend, local dev; proxies /api to the backend above

@@ -37,7 +37,7 @@ export const chatRoutes: FastifyPluginAsync<ChatRouteOptions> = async (app, { ch
     if (first.done) throw new Error("chat stream ended before it started");
     if (first.value.type === "error") {
       request.log.warn({ sessionKey, code: first.value.code }, "chat.send failed");
-      return reply.code(502).send({ error: { code: first.value.code, message: first.value.message } });
+      return reply.code(502).send({ code: first.value.code, message: first.value.message });
     }
 
     reply.hijack();
@@ -45,7 +45,6 @@ export const chatRoutes: FastifyPluginAsync<ChatRouteOptions> = async (app, { ch
     res.writeHead(200, {
       "content-type": "text/event-stream; charset=utf-8",
       "cache-control": "no-cache, no-transform",
-      connection: "keep-alive",
       "x-accel-buffering": "no", // no buffering in nginx
     });
     res.flushHeaders();

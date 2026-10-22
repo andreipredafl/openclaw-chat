@@ -90,9 +90,7 @@ test("answers 502 with JSON when the stream fails before it starts", async (t) =
   const res = await post(url, { message: "hi" });
   assert.equal(res.status, 502);
   assert.match(res.headers.get("content-type") ?? "", /^application\/json/);
-  assert.deepEqual(await res.json(), {
-    error: { code: "NOT_CONNECTED", message: "cannot call chat.send: not connected" },
-  });
+  assert.deepEqual(await res.json(), { code: "NOT_CONNECTED", message: "cannot call chat.send: not connected" });
 });
 
 test("uses agent:main:main when the body has no sessionKey", async (t) => {
