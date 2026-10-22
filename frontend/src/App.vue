@@ -32,6 +32,18 @@ async function send(text: string) {
         case "delta":
           reply.text = event.replace ? event.text : reply.text + event.text;
           break;
+        case "tool": {
+          // One card per toolCallId: the "completed" or "error" event updates the card "running" created.
+          reply.toolCalls ??= [];
+          const call = reply.toolCalls.find((c) => c.toolCallId === event.toolCallId);
+          if (call) {
+            call.status = event.status;
+            if (event.output !== undefined) call.output = event.output;
+          } else {
+            reply.toolCalls.push({ toolCallId: event.toolCallId, name: event.name, status: event.status, args: event.args, output: event.output });
+          }
+          break;
+        }
         case "done":
           reply.text = event.text;
           reply.status = "done";

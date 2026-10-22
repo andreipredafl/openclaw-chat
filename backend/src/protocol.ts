@@ -42,6 +42,8 @@ export type ConnectParams = {
   };
   role: "operator";
   scopes: string[];
+  // Client capabilities, for example "tool-events". Not part of the signed payload.
+  caps: string[];
   auth: { token: string };
   device: DeviceProof;
 };
@@ -81,6 +83,33 @@ export type ChatEvent =
   | (ChatEventBase & { state: "final"; stopReason?: string; message?: unknown })
   | (ChatEventBase & { state: "aborted"; stopReason?: string; message?: unknown })
   | (ChatEventBase & { state: "error"; errorMessage?: string; errorKind?: string });
+
+// --- Agent events ---
+
+// What the agent does during a run: tools, lifecycle, plans. The schema has no
+// sessionKey here, so filter by runId. `data` is open in the schema; its fields
+// depend on `stream`. Tool events reach only the connection that started the run
+// with the "tool-events" cap.
+export type AgentEvent = {
+  runId: string;
+  seq: number;
+  stream: string; // "tool" | "lifecycle" | "assistant" | ...
+  ts: number;
+  data: Record<string, unknown>;
+};
+
+// `data` of an agent event with stream "tool", as the gateway's runners build it.
+export type ToolEventData = {
+  phase: string; // "start" | "update" | "result"
+  name: string;
+  toolCallId: string;
+  // Set when the `tool_call` dispatcher ran this tool on the model's behalf.
+  parentToolCallId?: string;
+  args?: unknown; // on start
+  isError?: boolean; // on result
+  // On result. Same shape as a message: { content: [{ type: "text", text }, ...] }.
+  result?: unknown;
+};
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);

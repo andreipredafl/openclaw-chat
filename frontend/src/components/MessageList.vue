@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
 import type { Message } from "../types";
+import ToolCallCard from "./ToolCallCard.vue";
 
 const props = defineProps<{ messages: Message[] }>();
 const end = ref<HTMLDivElement | null>(null);
@@ -13,6 +14,9 @@ watch(() => props.messages, () => end.value?.scrollIntoView({ block: "end" }), {
   <div class="messages">
     <p v-if="messages.length === 0" class="hint">Send a message. The reply shows up as the model writes it.</p>
     <article v-for="m in messages" :key="m.id" :class="['message', m.role, m.status]">
+      <div v-if="m.toolCalls?.length" class="tools">
+        <ToolCallCard v-for="call in m.toolCalls" :key="call.toolCallId" :call="call" />
+      </div>
       <div class="text"><span v-if="m.phase && !m.text" class="phase">{{ m.phase.replaceAll("_", " ") }}… </span>{{ m.text }}</div>
       <div v-if="m.error" class="error">{{ m.error }}</div>
     </article>

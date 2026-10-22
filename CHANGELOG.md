@@ -24,6 +24,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Dependencies: `fastify` 5.12.7, `ws` 8.22.0, `vue` 3.5.44, `vite` 8.3.5, `@vitejs/plugin-vue` 6.0.10, `vue-tsc` 3.3.13
 - Postman collection for the backend in `docs/`
 - The assistant bubble shows the gateway's phase (`starting model…`) until the first text arrives
+- Tool call cards: `agent` events with `stream: "tool"` become `tool` SSE events (`running` with the input, then `completed` or `error` with the output); the page shows one card per call above the reply. The gateway client declares the `tool-events` and `chat-only-assistant-text` caps at connect
 
 ### Changed
 
@@ -31,6 +32,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Chat service: `events.on` from `node:events` replaces the hand-written event queue
 - The 502 body of `POST /api/chat` is `{ code, message }`, the same shape as Fastify's validation errors
 - Gateway client: `connect()` is called once; the backend passes the Fastify logger straight through
+- Gateway client re-emits every event frame as `event` with its name, so the chat service follows `chat` and `agent` events in one loop
 - `npm run smoke` sends its message through the chat service instead of its own event handling
 - README and ARCHITECTURE shortened; comments in compose, nginx and env files trimmed
 

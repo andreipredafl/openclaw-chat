@@ -54,6 +54,7 @@ The approval lives in the gateway volume and the key pair in the backend volume,
 
 - Enter sends, Shift+Enter adds a line. Stop aborts the run on the gateway and keeps the text received so far.
 - One gateway session per page load, shown in the header. The model remembers the messages of that page load. A refresh starts a new session.
+- When the agent calls a tool, a card with the tool name and its state (`running`, then `completed` or `error`) shows above the reply. Open it for the input and the output. Try: `What is the weather in Bucharest? Fetch https://wttr.in/Bucharest?format=3 with web_fetch.`
 
 Without the page:
 
@@ -62,7 +63,7 @@ curl -N -X POST localhost:8080/api/chat -H 'content-type: application/json' \
   -d '{"message":"Count from 1 to 10, one number per line"}'
 ```
 
-Events: `started`, `status` (the gateway's phase, shown in the bubble until the first text), `delta` (one every few tokens), then `done` or `error`.
+Events: `started`, `status` (the gateway's phase, shown in the bubble until the first text), `tool` (a tool call: `running` with the input, then `completed` or `error` with the output), `delta` (one every few tokens), then `done` or `error`.
 
 ## Local development
 
@@ -93,3 +94,4 @@ A Postman collection for the backend is in `docs/`.
 - The reply is a `429`: the free model's rate limit. Wait a minute.
 - The reply shows up all at once: the gateway holds the text until the end when the model's stream contains reasoning ([openclaw#144765](https://github.com/openclaw/openclaw/issues/144765)). `openclaw/openclaw.json` sets `agents.defaults.thinkingDefault` to `off` for that reason. A model that reasons no matter what, such as `thinkingmachines/inkling`, still arrives in one piece.
 - `devices approve` says the request is unknown: that id expired. The backend logs the current one on every retry.
+- The reply has no tool card: the model chose not to call a tool. Name the tool and the URL in the message, as in the example above.

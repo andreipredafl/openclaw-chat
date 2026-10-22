@@ -2,7 +2,8 @@
 // handshake, nothing above that:
 //   - handshake: wait for connect.challenge, send a signed connect, get hello-ok
 //   - request/response: match `res` frames to `req` frames by id
-//   - events: re-emit every `event` frame under its event name
+//   - events: re-emit every `event` frame under its event name, and once more as
+//     "event" with (name, payload) so one listener can follow several kinds in order
 //   - reconnect: backoff with jitter; a fixed slow retry while pairing is pending
 
 import { randomUUID } from "node:crypto";
@@ -23,6 +24,9 @@ import {
 const CLIENT = { id: "gateway-client", mode: "backend", version: "0.1.0" } as const;
 const ROLE = "operator";
 const SCOPES = ["operator.read", "operator.write"];
+// tool-events: send us the tool events of the runs we start. chat-only-assistant-text:
+// skip the copy of the assistant text on the agent stream; the reply comes from `chat`.
+const CAPS = ["tool-events", "chat-only-assistant-text"];
 const REQUEST_TIMEOUT_MS = 30_000;
 
 // details.code values on a failed connect that a retry cannot fix.
@@ -216,7 +220,10 @@ export class GatewayClient extends EventEmitter {
       return;
     }
 
-    if (frame.type === "event") this.emit(frame.event, frame.payload);
+    if (frame.type === "event") {
+      this.emit(frame.event, frame.payload);
+      this.emit("event", frame.event, frame.payload);
+    }
   }
 
   private async sendConnect(challenge: ConnectChallenge): Promise<void> {
@@ -237,6 +244,7 @@ export class GatewayClient extends EventEmitter {
       client: { ...CLIENT, platform: process.platform },
       role: ROLE,
       scopes: SCOPES,
+      caps: CAPS,
       auth: { token: this.token },
       device,
     };

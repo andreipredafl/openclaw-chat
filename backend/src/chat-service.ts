@@ -5,11 +5,13 @@ import { on, type EventEmitter } from "node:events";
 import { GatewayError, silentLog, type GatewayClient, type Logger } from "./gateway-client.js";
 import {
   isRecord,
+  type AgentEvent,
   type ChatAbortParams,
   type ChatAbortResult,
   type ChatEvent,
   type ChatSendAck,
   type ChatSendParams,
+  type ToolEventData,
 } from "./protocol.js";
 
 export type ChatStreamEvent =
@@ -17,6 +19,9 @@ export type ChatStreamEvent =
   | { type: "status"; phase: string }
   // With replace, `text` is the whole reply so far, not an append.
   | { type: "delta"; text: string; replace: boolean }
+  // One tool call of the run. The same toolCallId comes twice: "running" with the
+  // arguments, then "completed" or "error" with the output.
+  | { type: "tool"; toolCallId: string; name: string; status: "running" | "completed" | "error"; args?: unknown; output?: string }
   // `text` is the full reply.
   | { type: "done"; text: string; stopReason?: string }
   | { type: "error"; code: string; message: string };
@@ -38,9 +43,10 @@ export class ChatService {
   ) {}
 
   async *streamChat({ message, sessionKey, signal }: StreamChatInput): AsyncGenerator<ChatStreamEvent, void, undefined> {
-    // Subscribe before chat.send: the first events can arrive before the ack. The
-    // iterator buffers events, ends on "disconnected" and throws when the signal aborts.
-    const events = on(this.gateway, "chat", { signal, close: ["disconnected"] });
+    // Subscribe before chat.send: the first events can arrive before the ack. "event"
+    // carries every gateway event as (name, payload), so `chat` and `agent` stay in
+    // order. The iterator buffers, ends on "disconnected" and throws when the signal aborts.
+    const events = on(this.gateway, "event", { signal, close: ["disconnected"] });
     let runId: string | undefined;
     let settled = false; // the gateway ended the run, or no run was started
     let text = "";
@@ -52,8 +58,13 @@ export class ChatService {
       yield { type: "started", runId, sessionKey };
 
       for await (const args of events) {
-        const payload: unknown = args[0];
-        if (!isChatEvent(payload) || payload.sessionKey !== sessionKey || payload.runId !== runId) continue;
+        const [name, payload] = args as [unknown, unknown];
+        if (name === "agent") {
+          const tool = toolEvent(payload, runId);
+          if (tool) yield tool;
+          continue;
+        }
+        if (name !== "chat" || !isChatEvent(payload) || payload.sessionKey !== sessionKey || payload.runId !== runId) continue;
         switch (payload.state) {
           case "status":
             yield { type: "status", phase: payload.phase };
@@ -112,7 +123,35 @@ function isChatEvent(payload: unknown): payload is ChatEvent {
   );
 }
 
-// Text of an assistant message: { role, content: [{ type: "text", text }, ...] }.
+function isAgentEvent(payload: unknown): payload is AgentEvent {
+  return isRecord(payload) && typeof payload.runId === "string" && typeof payload.stream === "string" && isRecord(payload.data);
+}
+
+function isToolEventData(data: Record<string, unknown>): data is Record<string, unknown> & ToolEventData {
+  return typeof data.phase === "string" && typeof data.name === "string" && typeof data.toolCallId === "string";
+}
+
+// A tool event of this run as a stream event, or undefined. Only "start" and "result"
+// change the card. "update" carries partial output and is skipped to keep the stream small.
+function toolEvent(payload: unknown, runId: string): ChatStreamEvent | undefined {
+  if (!isAgentEvent(payload) || payload.runId !== runId || payload.stream !== "tool" || !isToolEventData(payload.data)) return undefined;
+  const { phase, name, toolCallId, args, isError, result } = payload.data;
+  // The gateway loads tools on demand: the model finds one with `tool_search`, then
+  // calls it by id through the `tool_call` dispatcher. The tool itself follows as its
+  // own event with parentToolCallId, so a card for the dispatcher would only repeat it.
+  if (name === "tool_call") return undefined;
+  if (phase === "start") {
+    return args === undefined ? { type: "tool", toolCallId, name, status: "running" } : { type: "tool", toolCallId, name, status: "running", args };
+  }
+  if (phase === "result") {
+    const status = isError === true ? "error" : "completed";
+    const output = messageText(result);
+    return output === undefined ? { type: "tool", toolCallId, name, status } : { type: "tool", toolCallId, name, status, output };
+  }
+  return undefined;
+}
+
+// Text parts of a message or a tool result: { content: [{ type: "text", text }, ...] }.
 function messageText(message: unknown): string | undefined {
   if (!isRecord(message) || !Array.isArray(message.content)) return undefined;
   const parts: string[] = [];

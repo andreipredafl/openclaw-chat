@@ -29,7 +29,12 @@ class FakeGateway extends EventEmitter {
 
   // Emits a chat event for the test session and run unless the fields are overridden.
   chat(event: Record<string, unknown>): void {
-    this.emit("chat", { runId: RUN, sessionKey: SESSION, seq: 0, ...event });
+    this.emit("event", "chat", { runId: RUN, sessionKey: SESSION, seq: 0, ...event });
+  }
+
+  // Emits an agent tool event for the test run. Agent events carry no sessionKey.
+  agent(data: Record<string, unknown>, runId = RUN, stream = "tool"): void {
+    this.emit("event", "agent", { runId, seq: 0, stream, ts: 0, data });
   }
 
   methods(): string[] {
@@ -77,7 +82,7 @@ test("yields started, status, deltas and done, with the full text on done", asyn
     { type: "delta", text: "lo", replace: false },
     { type: "done", text: "Hello", stopReason: "end_turn" },
   ]);
-  assert.equal(gateway.listenerCount("chat"), 0);
+  assert.equal(gateway.listenerCount("event"), 0);
   assert.equal(gateway.listenerCount("disconnected"), 0);
   assert.deepEqual(gateway.methods(), ["chat.send"]);
 });
@@ -110,6 +115,42 @@ test("ignores events from other sessions and other runs", async () => {
   assert.deepEqual(await drain(stream), [
     { type: "delta", text: "yes", replace: false },
     { type: "done", text: "yes" },
+  ]);
+});
+
+test("tool events of the run become tool events; other runs, streams and phases are skipped", async () => {
+  const gateway = new FakeGateway();
+  const stream = start(gateway);
+
+  await nextEvent(stream);
+  // What the gateway sends for one web_fetch through the on-demand dispatcher.
+  const child = "tool_call:call-1:web_fetch:1";
+  gateway.agent({ phase: "start", name: "tool_call", toolCallId: "call-1", args: { id: "openclaw:core:web_fetch", args: { url: "https://example.com" } } });
+  gateway.agent({ phase: "start", name: "web_fetch", toolCallId: child, parentToolCallId: "call-1", args: { url: "https://example.com" } });
+  gateway.agent({ phase: "update", name: "web_fetch", toolCallId: child, parentToolCallId: "call-1", partialResult: "Exam" });
+  gateway.agent({ phase: "start", name: "exec", toolCallId: "call-9", args: { command: "ls" } }, "run-2");
+  gateway.agent({ text: "no" }, RUN, "assistant");
+  gateway.agent({
+    phase: "result",
+    name: "web_fetch",
+    toolCallId: child,
+    parentToolCallId: "call-1",
+    isError: false,
+    result: { content: [{ type: "text", text: "Example Domain" }] },
+  });
+  gateway.agent({ phase: "result", name: "tool_call", toolCallId: "call-1", isError: false, result: { content: [{ type: "text", text: "wrapped" }] } });
+  gateway.agent({ phase: "start", name: "exec", toolCallId: "call-2" });
+  gateway.agent({ phase: "result", name: "exec", toolCallId: "call-2", isError: true, result: { content: [{ type: "text", text: "not allowed" }] } });
+  gateway.chat({ state: "delta", deltaText: "Done." });
+  gateway.chat({ state: "final" });
+
+  assert.deepEqual(await drain(stream), [
+    { type: "tool", toolCallId: child, name: "web_fetch", status: "running", args: { url: "https://example.com" } },
+    { type: "tool", toolCallId: child, name: "web_fetch", status: "completed", output: "Example Domain" },
+    { type: "tool", toolCallId: "call-2", name: "exec", status: "running" },
+    { type: "tool", toolCallId: "call-2", name: "exec", status: "error", output: "not allowed" },
+    { type: "delta", text: "Done.", replace: false },
+    { type: "done", text: "Done." },
   ]);
 });
 
@@ -160,7 +201,7 @@ test("an error event ends the stream; unknown states are ignored", async () => {
   gateway.chat({ state: "error", errorMessage: "rate limited", errorKind: "rate_limit" });
 
   assert.deepEqual(await drain(stream), [{ type: "error", code: "rate_limit", message: "rate limited" }]);
-  assert.equal(gateway.listenerCount("chat"), 0);
+  assert.equal(gateway.listenerCount("event"), 0);
   assert.deepEqual(gateway.methods(), ["chat.send"]);
 });
 
@@ -187,7 +228,7 @@ test("a rejected chat.send yields one error event and nothing else", async () =>
   assert.deepEqual(await drain(stream), [
     { type: "error", code: "INVALID_REQUEST/SESSION_INVALID", message: "bad session" },
   ]);
-  assert.equal(gateway.listenerCount("chat"), 0);
+  assert.equal(gateway.listenerCount("event"), 0);
   assert.deepEqual(gateway.methods(), ["chat.send"]);
 });
 
@@ -205,7 +246,7 @@ test("aborting the signal ends the stream and stops the run on the gateway", asy
   assert.deepEqual(await pending, { done: true, value: undefined });
 
   assert.deepEqual(gateway.calls.at(-1), { method: "chat.abort", params: { sessionKey: SESSION, runId: RUN } });
-  assert.equal(gateway.listenerCount("chat"), 0);
+  assert.equal(gateway.listenerCount("event"), 0);
 });
 
 test("a gateway disconnect during the run yields an error and skips chat.abort", async () => {
